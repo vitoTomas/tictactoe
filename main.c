@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 
 #ifndef MAX_DEPTH
 #define MAX_DEPTH 2
@@ -11,11 +12,21 @@
 #define USEC 250e3
 #endif
 
-static char game_array[][3] = {{'_', '_', '_'},
-                               {'_', '_', '_'},
-                               {'_', '_', '_'}};
+#ifndef DIM
+#define DIM 3
+#endif
+
+#define POSITIVE 4
+#define NEGATIVE -1
+
+static char game_array[DIM][DIM];
 
 static void *bp;
+
+inline static void initialize_area()
+{
+  memset(game_array, '_', DIM  * DIM);
+}
  
 static void draw_screen()
 {
@@ -23,19 +34,19 @@ static void draw_screen()
 
   printf("\033[2J\033[1;1H");
 
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
+  for (i = 0; i < DIM; i++) {
+    for (j = 0; j < DIM; j++) {
       printf("%c ", game_array[j][i]);
     }
     printf("\n");
   }
 }
 
-static void debug_draw(const char array[3][3])
+static void debug_draw(const char array[DIM][DIM])
 {
   int i, j;
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
+  for (i = 0; i < DIM; i++) {
+    for (j = 0; j < DIM; j++) {
       printf("%c ", array[j][i]);
     }
     printf("\n");
@@ -44,13 +55,13 @@ static void debug_draw(const char array[3][3])
 
 static int test(int col, int row)
 {
-  if (col > 3 || col < 1) return 1;
-  if (row > 3 || row < 1) return 2;
+  if (col > DIM || col < 1) return 1;
+  if (row > DIM || row < 1) return 2;
   if (game_array[col - 1][row - 1] != '_') return 3;
   return 0;
 }
 
-static void player_move()
+static void player_move(char player)
 {
   int col = 0, row = 0; 
   
@@ -59,20 +70,20 @@ static void player_move()
     scanf("%d %d", &col, &row);
   } while (test(col, row));
 
-  game_array[col - 1][row -1] = 'X';
+  game_array[col - 1][row - 1] = player;
 }
 
-static int check_win_condition(const char array[3][3])
+static int check_win_condition(const char array[DIM][DIM])
 {
   int i, j;
   int condition = 0;
   char player;
   
   /* Vertical scan */
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < DIM; i++) {
     player = 0;
     
-    for (j = 0; j < 3; j++) {
+    for (j = 0; j < DIM; j++) {
       condition = 0;
       if (j == 0) player = array[i][j];
       if (array[i][j] == '_' || player != array[i][j]) break;
@@ -83,10 +94,10 @@ static int check_win_condition(const char array[3][3])
   }
   
   /* Horizontal scan */
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < DIM; i++) {
     player = 0;
     
-    for (j = 0; j < 3; j++) {
+    for (j = 0; j < DIM; j++) {
       condition = 0;
       if (j == 0) player = array[j][i];
       if (array[j][i] == '_' || player != array[j][i]) break;
@@ -97,7 +108,7 @@ static int check_win_condition(const char array[3][3])
   }
 
   /* Diagonal scan top-left to bottom-right */
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < DIM; i++) {
     condition = 0;
     if (i == 0) player = array[i][i];
     if (array[i][i] == '_' || player != array[i][i]) break;
@@ -107,10 +118,10 @@ static int check_win_condition(const char array[3][3])
   if (condition) return player;
   
   /* Diagonal scan top-right to bottom-left */
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < DIM; i++) {
     condition = 0;
-    if (i == 0) player = game_array[i][2 - i];
-    if (array[i][2 - i] == '_' || player != array[i][2 - i]) break;
+    if (i == 0) player = game_array[i][DIM - 1 - i];
+    if (array[i][DIM - 1 - i] == '_' || player != array[i][DIM - 1 - i]) break;
     condition = 1;
   }
   
@@ -118,7 +129,7 @@ static int check_win_condition(const char array[3][3])
   return 0;
 }
 
-static void propagation_state(const char game_test_array[3][3],
+static void propagation_state(const char game_test_array[DIM][DIM],
                               char curr_player,
                               int i,
                               int j,
@@ -137,11 +148,12 @@ static void propagation_state(const char game_test_array[3][3],
   usleep(USEC);
 }
 
-static int propagate_move(const char game_array[3][3],
+static int propagate_move(const char game_array[DIM][DIM],
                           int depth,
-                          char next_player) {
+                          char next_player,
+                          char root_player) {
   int i, j, result = 0;
-  char curr_player, player, game_test_array[3][3];
+  char curr_player, player, game_test_array[DIM][DIM];
 
   if (depth <= 0) return 0;
   depth--;
@@ -150,17 +162,20 @@ static int propagate_move(const char game_array[3][3],
   if (curr_player == 'X') next_player = 'O';
   else next_player = 'X';
 
-  memcpy(game_test_array, game_array, sizeof(char) * 9);
+  memcpy(game_test_array, game_array, sizeof(char) * (DIM * DIM));
 
   player = check_win_condition(game_test_array);
-  if (player == 'O') return 2;
-  else if (player == 'X') return -1;
+  if (player == root_player) return POSITIVE;
+  else if (player != 0) return NEGATIVE;
 
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
+  for (i = 0; i < DIM; i++) {
+    for (j = 0; j < DIM; j++) {
       if (game_test_array[i][j] == '_') {
         game_test_array[i][j] = curr_player;
-        result += propagate_move(game_test_array, depth, next_player);
+        result += propagate_move(game_test_array,
+                                 depth,
+                                 next_player,
+                                 root_player);
 #ifdef DEBUG
         propagation_state(game_test_array, curr_player, i, j, result);
 #endif
@@ -172,19 +187,42 @@ static int propagate_move(const char game_array[3][3],
   return result;  
 }
 
-static void computer_move()
+static void make_random_move(char player)
+{
+  int i, j;
+
+  do {
+    i = rand() % DIM;
+    j = rand() % DIM;
+  } while (test(i + 1, j + 1));
+
+  game_array[i][j] = player;
+}
+
+static void computer_move(char player, int move_counter)
 {
   int i, j, result, resolved = 0;
   int maxres = 0, maxi = -1, maxj = -1;
-  char game_test_array[3][3];
+  char game_test_array[DIM][DIM], next_player;
 
-  memcpy(game_test_array, game_array, sizeof(char) * 9);
+  if (((DIM * DIM) - move_counter) <= 1) {
+    make_random_move(player);
+    return;
+  }
 
-  for (i = 0; i < 3; i++) {
-    for (j = 0; j < 3; j++) {
+  memcpy(game_test_array, game_array, sizeof(char) * (DIM * DIM));
+
+  for (i = 0; i < DIM; i++) {
+    for (j = 0; j < DIM; j++) {
       if (game_test_array[i][j] == '_') {
-        game_test_array[i][j] = 'O';
-        result = propagate_move(game_test_array, MAX_DEPTH, 'X');
+        game_test_array[i][j] = player;
+        if (player == 'O') next_player = 'X';
+        else next_player = 'O';
+        //player == 'O' ? (next_player = 'X') : (next_player = 'O');
+        result = propagate_move(game_test_array,
+                                MAX_DEPTH,
+                                next_player,
+                                player);
         
         if (maxi == -1) {
           maxi = i;
@@ -203,26 +241,43 @@ static void computer_move()
     }
   }
 
-  game_array[maxi][maxj] = 'O';
+  game_array[maxi][maxj] = player;
 }
 
-static void game_loop()
+static void game_loop(int game_mode)
 {
   char player;
-  int move_counter = 9;
+  int move_counter = DIM * DIM;
 
   do {
-    player_move();
-    computer_move();
-    draw_screen();
-    
+    switch (game_mode) {
+      case 1:
+        draw_screen();
+        player_move('X');
+        computer_move('O', move_counter);
+        draw_screen();
+        break;
+      case 2:
+        computer_move('X', move_counter);
+        draw_screen();
+        player_move('O');
+        break;
+      case 3:
+        computer_move('X', move_counter);
+        draw_screen();
+        usleep(500e3);
+        computer_move('O', move_counter);
+        draw_screen();
+        usleep(500e3);
+    }
+
     player = check_win_condition(game_array);
     if (player != 0) {
       printf("Player %c wins!\n", player);
       return;
     }
 
-    move_counter-=2;
+    move_counter -= 2;
   } while (move_counter > 0);
 
   printf("Tie!\n");
@@ -230,10 +285,23 @@ static void game_loop()
 
 int main()
 {
+  int game_mode;
   /* Get the base pointer of the program. */
   __asm__("mov %%rsp, %0" : "=r"(bp));
-  
-  draw_screen();
-  game_loop();
+
+  printf("Choose game mode:"
+         "\n* 1 - player v computer"
+         "\n* 2 - computer v player"
+         "\n* 3 - computer v computer\n");
+  scanf("%d", &game_mode);
+  if (game_mode < 1 || game_mode > 3) {
+    printf("Incorrect game mode!\n");
+    exit(1);
+  }
+
+  initialize_area();
+  srand(time(NULL));
+  //draw_screen();
+  game_loop(game_mode);
   exit(0);
 }
