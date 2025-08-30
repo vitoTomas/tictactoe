@@ -120,7 +120,7 @@ static int check_win_condition(const char array[DIM][DIM])
   /* Diagonal scan top-right to bottom-left */
   for (i = 0; i < DIM; i++) {
     condition = 0;
-    if (i == 0) player = game_array[i][DIM - 1 - i];
+    if (i == 0) player = array[i][DIM - 1 - i];
     if (array[i][DIM - 1 - i] == '_' || player != array[i][DIM - 1 - i]) break;
     condition = 1;
   }
@@ -241,7 +241,8 @@ static void computer_move(char player, int move_counter)
     }
   }
 
-  game_array[maxi][maxj] = player;
+  if (maxi != -1)
+    game_array[maxi][maxj] = player;
 }
 
 static void game_loop(int game_mode)
